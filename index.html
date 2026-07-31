@@ -44,7 +44,8 @@
     --shadow:0 10px 30px rgba(24,42,78,0.10);
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  html{scroll-behavior:smooth;}
+  /* NOTE: no CSS scroll-behavior:smooth — in-page smooth scrolling is done in JS
+     so that a #hash in the URL can never animate the page away from the top on load. */
   body{
     font-family:'Brother 1816', sans-serif;
     background:var(--white);
@@ -605,6 +606,29 @@
     }
   }
 
+  // Never auto-scroll to an anchor on page load (e.g. a shared/reloaded URL
+  // carrying #tickets) — always open at the top of the page.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  if (location.hash){
+    history.replaceState(null, '', location.pathname + location.search);
+    window.scrollTo(0, 0);
+    requestAnimationFrame(function(){ window.scrollTo(0, 0); });
+    window.addEventListener('load', function(){ window.scrollTo(0, 0); });
+  }
+
+  // In-page CTA links scroll smoothly WITHOUT writing a #hash into the URL,
+  // so reloading or sharing the link never lands mid-page.
+  document.querySelectorAll('a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(e){
+      const id = a.getAttribute('href').slice(1);
+      const el = id && document.getElementById(id);
+      if (el){
+        e.preventDefault();
+        el.scrollIntoView({ behavior:'smooth' });
+      }
+    });
+  });
+
   // Hide the mobile bar while the checkout panel is already on screen
   if ('IntersectionObserver' in window){
     const co = document.getElementById('checkout');
@@ -702,17 +726,36 @@
       handler: function (response){
         showToast("Payment successful! Confirmation sent to " + email);
       },
-      modal: { ondismiss: function(){ showToast("Payment window closed."); } }
+      modal: { ondismiss: function(){
+        showToast("Payment window closed.");
+        unfreezePage();
+      } }
     };
 
-    if (typeof Razorpay === "undefined"){
+    // Don't open the checkout at all until a real Key ID is configured —
+    // opening Razorpay with the placeholder key shows a broken error screen
+    // and can leave the page scroll-locked when dismissed.
+    if (typeof Razorpay === "undefined" || RAZORPAY_KEY_ID.indexOf("YOUR_KEY_ID") !== -1){
       showToast("Payment gateway not configured yet — add your Razorpay Key ID to go live.");
       return;
     }
 
     const rzp = new Razorpay(options);
-    rzp.on('payment.failed', function (response){ showToast("Payment failed. Please try again."); });
+    rzp.on('payment.failed', function (response){
+      showToast("Payment failed. Please try again.");
+      try { rzp.close(); } catch(e){}
+      unfreezePage();
+    });
     rzp.open();
+  }
+
+  // Restore page scroll if the Razorpay overlay errored and left the
+  // body scroll-locked after being dismissed.
+  function unfreezePage(){
+    setTimeout(function(){
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    }, 250);
   }
 
   renderSummary();
