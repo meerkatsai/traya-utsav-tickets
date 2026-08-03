@@ -748,7 +748,8 @@
                 single: qty.single > 0 ? dateLabel('single') : "",
                 group: qty.group > 0 ? dateLabel('group') : ""
               },
-              total: res.d.amount / 100
+              total: res.d.amount / 100,
+              ts: Date.now()
             }));
           } catch(e){}
           window.location.href = "thank-you.html";

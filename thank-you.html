@@ -142,15 +142,6 @@
   .gate-note p{ font-size:13.5px; font-weight:500; color:var(--ink); }
   .gate-note b{ color:var(--maroon); }
 
-  .event-chips{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:26px; }
-  .meta-chip{
-    background:var(--navy); color:var(--cream);
-    border-radius:10px; padding:10px 18px;
-    display:flex; align-items:center; gap:9px;
-    font-size:13px; font-weight:700;
-  }
-  .meta-chip svg{ flex:none; color:var(--gold); }
-
   .actions{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-top:28px; }
 
   footer{
@@ -204,18 +195,19 @@
     <p class="sub" id="subline">Thank you — your passes for Traya Utsav Chapter 2.0 are locked in. See you at Jayamahal Palace!</p>
 
     <div class="shell">
+      <div class="panel" id="noData" style="display:none;">
+        <h2>Booking Details</h2>
+        <p style="font-size:14px; font-weight:500;">We couldn't find your booking details on this device. Don't worry — your Razorpay payment receipt (sent by email &amp; SMS) has everything, and your Payment ID is your booking reference.</p>
+      </div>
+
       <div class="panel" id="ticketPanel">
         <h2>Your Tickets</h2>
-        <div id="ticketRows">
-          <div class="row"><span class="k">Details</span><span class="v">Available in your Razorpay receipt</span></div>
-        </div>
+        <div id="ticketRows"></div>
       </div>
 
       <div class="panel" id="paymentPanel">
         <h2>Payment Details</h2>
-        <div id="paymentRows">
-          <div class="row"><span class="k">Status</span><span class="v">Paid ✓</span></div>
-        </div>
+        <div id="paymentRows"></div>
       </div>
 
       <div class="gate-note">
@@ -224,23 +216,7 @@
       </div>
     </div>
 
-    <div class="event-chips">
-      <div class="meta-chip">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        10–11 October 2026
-      </div>
-      <a class="meta-chip" href="https://www.google.com/maps/search/?api=1&amp;query=Jayamahal+Palace+Exhibition+Centre%2C+Bengaluru" target="_blank" rel="noopener">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-        Jayamahal Palace Exhibition Centre, Bengaluru
-      </a>
-      <div class="meta-chip">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>
-        12:00 PM – 9:00 PM
-      </div>
-    </div>
-
     <div class="actions">
-      <a class="btn btn-primary" href="index.html">Book More Passes</a>
       <a class="btn btn-outline" href="https://www.instagram.com/trayautsav/" target="_blank" rel="noopener">Follow @trayautsav</a>
     </div>
   </div>
@@ -279,6 +255,12 @@
   let booking = null;
   try { booking = JSON.parse(sessionStorage.getItem('trayaBooking') || "null"); } catch(e){}
 
+  if (!booking){
+    document.getElementById('ticketPanel').style.display = 'none';
+    document.getElementById('paymentPanel').style.display = 'none';
+    document.getElementById('noData').style.display = 'block';
+  }
+
   if (booking){
     if (booking.name){
       document.getElementById('subline').textContent =
@@ -307,7 +289,17 @@
     let prows = "";
     if (booking.paymentId) prows += '<div class="row"><span class="k">Payment ID</span><span class="v">' + esc(booking.paymentId) + '</span></div>';
     if (booking.orderId) prows += '<div class="row"><span class="k">Order ID</span><span class="v">' + esc(booking.orderId) + '</span></div>';
-    if (booking.email) prows += '<div class="row"><span class="k">Booked by</span><span class="v">' + esc(booking.name || "") + '<br>' + esc(booking.email) + '</span></div>';
+    if (booking.total) prows += '<div class="row"><span class="k">Amount Paid</span><span class="v">' + formatINR(booking.total) + '</span></div>';
+    if (booking.ts){
+      const paidOn = new Date(booking.ts).toLocaleString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata'
+      });
+      prows += '<div class="row"><span class="k">Paid on</span><span class="v">' + esc(paidOn) + ' IST</span></div>';
+    }
+    if (booking.name) prows += '<div class="row"><span class="k">Booked by</span><span class="v">' + esc(booking.name) + '</span></div>';
+    if (booking.email) prows += '<div class="row"><span class="k">Email</span><span class="v">' + esc(booking.email) + '</span></div>';
+    if (booking.phone) prows += '<div class="row"><span class="k">Phone</span><span class="v">' + esc(booking.phone) + '</span></div>';
     prows += '<div class="row"><span class="k">Status</span><span class="v">Paid ✓</span></div>';
     document.getElementById('paymentRows').innerHTML = prows;
 
