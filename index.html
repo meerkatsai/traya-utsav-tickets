@@ -676,67 +676,70 @@
       return;
     }
 
-    const bookingNotes = {
-      event: "Traya Utsav Chapter 2.0",
-      tickets: JSON.stringify(qty),
-      singleDayDate: qty.single > 0 ? dateLabel('single') : "",
-      groupDate: qty.group > 0 ? dateLabel('group') : ""
-    };
-
-    // ---------------------------------------------------------------
-    // RAZORPAY INTEGRATION — CONFIGURE BEFORE GOING LIVE
-    // ---------------------------------------------------------------
-    // This page is wired for Razorpay's client-side Checkout, but a
-    // real payment needs a tiny backend (Razorpay order creation +
-    // signature verification) which this static page cannot provide
-    // on its own. To go live:
-    //   1. Create a Razorpay account & get your live Key ID.
-    //   2. Stand up ONE backend endpoint that calls Razorpay's
-    //      Orders API (razorpayInstance.orders.create) and returns
-    //      an order_id — never put your Key SECRET in this file.
-    //   3. Replace RAZORPAY_KEY_ID below with your real live Key ID.
-    //   4. Replace createOrderOnServer() with a fetch() call to your
-    //      backend endpoint from step 2.
-    //   5. Verify the payment signature server-side (handler below)
-    //      before marking a booking as confirmed / sending tickets.
-    // ---------------------------------------------------------------
-
-    const RAZORPAY_KEY_ID = "rzp_test_YOUR_KEY_ID_HERE"; // TODO: replace with live Key ID
-
-    const options = {
-      key: RAZORPAY_KEY_ID,
-      amount: total * 100,
-      currency: "INR",
-      name: "House of IndiExpo",
-      description: "Traya Utsav — Chapter 2.0 (10–11 Oct 2026)",
-      image: "",
-      prefill: { name: name, email: email, contact: phone },
-      notes: bookingNotes,
-      theme: { color: "#182A4E" },
-      handler: function (response){
-        showToast("Payment successful! Confirmation sent to " + email);
-      },
-      modal: { ondismiss: function(){
-        showToast("Payment window closed.");
-        unfreezePage();
-      } }
-    };
-
-    // Don't open the checkout at all until a real Key ID is configured —
-    // opening Razorpay with the placeholder key shows a broken error screen
-    // and can leave the page scroll-locked when dismissed.
-    if (typeof Razorpay === "undefined" || RAZORPAY_KEY_ID.indexOf("YOUR_KEY_ID") !== -1){
-      showToast("Payment gateway not configured yet — add your Razorpay Key ID to go live.");
+    if (typeof Razorpay === "undefined"){
+      showToast("Payment gateway couldn't load — please check your connection and refresh.");
       return;
     }
 
-    const rzp = new Razorpay(options);
-    rzp.on('payment.failed', function (response){
-      showToast("Payment failed. Please try again.");
-      try { rzp.close(); } catch(e){}
-      unfreezePage();
-    });
-    rzp.open();
+    // ---------------------------------------------------------------
+    // RAZORPAY STANDARD CHECKOUT — LIVE (Orders API flow)
+    // ---------------------------------------------------------------
+    // Live mode requires a server-created order_id. The endpoint below
+    // (a Vercel serverless function in this repo, /api/create-order)
+    // recomputes the amount from the ticket counts, creates the order
+    // via Razorpay's Orders API using keys stored in Vercel env vars,
+    // and returns { orderId, amount, keyId }. No secret in this file.
+    // ---------------------------------------------------------------
+    const ORDER_ENDPOINT = "https://traya-utsav-tickets.vercel.app/api/create-order";
+
+    const payBtn = document.getElementById('payBtn');
+    payBtn.disabled = true;
+    payBtn.textContent = "Opening secure payment…";
+
+    fetch(ORDER_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        qty: qty,
+        customer: { name: name, email: email, phone: phone },
+        dates: {
+          single: qty.single > 0 ? dateLabel('single') : "",
+          group: qty.group > 0 ? dateLabel('group') : ""
+        }
+      })
+    })
+    .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+    .then(function(res){
+      if (!res.ok || !res.d.orderId) throw new Error(res.d.error || "order creation failed");
+      const options = {
+        key: res.d.keyId,
+        order_id: res.d.orderId,
+        amount: res.d.amount,
+        currency: res.d.currency || "INR",
+        name: "House of IndiExpo",
+        description: "Traya Utsav — Chapter 2.0 (10–11 Oct 2026)",
+        prefill: { name: name, email: email, contact: phone },
+        theme: { color: "#182A4E" },
+        handler: function (response){
+          showToast("Payment successful! Confirmation sent to " + email);
+        },
+        modal: { ondismiss: function(){
+          showToast("Payment window closed.");
+          unfreezePage();
+        } }
+      };
+      const rzp = new Razorpay(options);
+      rzp.on('payment.failed', function (response){
+        showToast("Payment failed. Please try again.");
+        try { rzp.close(); } catch(e){}
+        unfreezePage();
+      });
+      rzp.open();
+    })
+    .catch(function(err){
+      showToast("Couldn't start the payment — please try again in a moment.");
+    })
+    .then(function(){ renderSummary(); });
   }
 
   // Restore page scroll if the Razorpay overlay errored and left the
