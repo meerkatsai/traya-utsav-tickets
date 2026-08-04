@@ -733,7 +733,7 @@
         currency: res.d.currency || "INR",
         name: "House of IndiExpo",
         description: "Traya Utsav — Chapter 2.0 (10–11 Oct 2026)",
-        prefill: { name: name, email: email, contact: phone },
+        prefill: { name: name, email: email, contact: phone.replace(/\D/g, '').slice(-10) },
         theme: { color: "#182A4E" },
         handler: function (response){
           // Hand the booking over to the thank-you page via sessionStorage
